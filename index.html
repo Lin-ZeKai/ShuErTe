@@ -96,7 +96,7 @@
       width: 100%;
       padding: 14px 16px;
       font-size: 1.05rem;
-      font-weight: 700;
+      font-weight: 600;
       border-radius: 14px;
       border: 1px solid #e2e8f0;
       background: var(--card);
@@ -138,12 +138,37 @@
       transform: scale(0.98);
     }
 
-    .menu-tip {
-      margin: 0;
-      font-size: 0.78rem;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.5;
+    /* 首页方格预览（仅展示，不可点） */
+    .menu-grid-wrap {
+      position: relative;
+      background: var(--card);
+      border-radius: var(--radius-card);
+      padding: 10px;
+      box-shadow: var(--shadow);
+      width: 100%;
+      max-width: min(100%, 400px);
+      margin: 0 auto;
+    }
+
+    .menu-preview-grid {
+      display: grid;
+      gap: 0;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: var(--radius-inner);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .menu-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(0.62rem, calc(min(92vw, 400px) / var(--n, 4) * 0.42), 2rem);
+      user-select: none;
+      pointer-events: none;
     }
 
     /* —— 游戏页 —— */
@@ -183,9 +208,10 @@
     .timer-box {
       text-align: center;
       font-variant-numeric: tabular-nums;
-      font-weight: 800;
+      font-weight: 600;
       font-size: clamp(1.1rem, 3.8vw, 1.35rem);
       letter-spacing: 0.02em;
+      color: #b4bcc8;
     }
 
     .best-box {
@@ -211,7 +237,7 @@
       padding: 14px 16px;
       text-align: center;
       font-size: clamp(1.05rem, 3.4vw, 1.28rem);
-      font-weight: 800;
+      font-weight: 600;
       box-shadow: var(--shadow);
     }
 
@@ -247,7 +273,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 800;
+      font-weight: 600;
       font-variant-numeric: tabular-nums;
       font-size: clamp(0.62rem, calc(min(92vw, 400px) / var(--n, 4) * 0.42), 2rem);
       cursor: pointer;
@@ -342,14 +368,6 @@
       pointer-events: none;
     }
 
-    .hint {
-      text-align: center;
-      font-size: 0.86rem;
-      color: var(--muted);
-      margin: 2px 0 0;
-      padding: 0 4px;
-    }
-
     .result-banner {
       text-align: center;
       font-size: 0.95rem;
@@ -390,21 +408,21 @@
       <h1>舒尔特方格</h1>
       <p class="menu-desc">专注力训练 · 按 1 到 N 依次点按</p>
       <div class="menu-field">
-        <label for="sizeSelect">方格尺寸</label>
-        <select id="sizeSelect" aria-label="选择方格尺寸"></select>
+        <label for="sizeSelect">方格</label>
+        <select id="sizeSelect" aria-label="选择方格"></select>
       </div>
-      <div class="menu-best" id="menuBest">该尺寸最佳：<strong>—</strong></div>
+      <div class="menu-grid-wrap">
+        <div class="menu-preview-grid" id="menuPreviewGrid" style="--n: 4" aria-hidden="true"></div>
+      </div>
+      <div class="menu-best" id="menuBest">最佳：<strong>—</strong></div>
       <button type="button" class="btn-primary" id="btnStart">开始训练</button>
-      <p class="menu-tip">
-        手机使用：用 Safari / Chrome 打开本页即可；为更大显示区域可将手机横屏，或把页面「添加到主屏幕」后像 App 一样打开。
-      </p>
     </section>
 
     <section id="screenGame" class="screen screen-game hidden">
       <header class="game-header">
         <button type="button" class="btn-back" id="btnBack">返回</button>
         <div class="timer-box" id="timerDisplay">00.00 秒</div>
-        <div class="best-box" id="bestDisplay">本局尺寸最佳<br /><strong>—</strong></div>
+        <div class="best-box" id="bestDisplay">本局最佳<br /><strong>—</strong></div>
       </header>
 
       <div class="next-target" id="nextTarget">
@@ -419,7 +437,6 @@
         </div>
       </div>
 
-      <p class="hint" id="hintText">以升序从 1 到最后一个数字依次点按</p>
       <div class="result-banner" id="resultBanner"></div>
 
       <button type="button" class="btn-restart" id="btnRestart">重新开始</button>
@@ -439,6 +456,7 @@
       const screenMenu = document.getElementById("screenMenu");
       const screenGame = document.getElementById("screenGame");
       const sizeSelect = document.getElementById("sizeSelect");
+      const menuPreviewGrid = document.getElementById("menuPreviewGrid");
       const menuBest = document.getElementById("menuBest");
       const btnStart = document.getElementById("btnStart");
       const btnBack = document.getElementById("btnBack");
@@ -450,7 +468,6 @@
       const timerDisplay = document.getElementById("timerDisplay");
       const bestDisplay = document.getElementById("bestDisplay");
       const resultBanner = document.getElementById("resultBanner");
-      const hintText = document.getElementById("hintText");
       const btnRestart = document.getElementById("btnRestart");
 
       let n = 4;
@@ -490,7 +507,7 @@
       function updateGameBestUI() {
         const b = readBest(n);
         bestDisplay.innerHTML =
-          "本局尺寸最佳<br /><strong>" +
+          "本局最佳<br /><strong>" +
           (b == null ? "—" : formatSeconds(b).replace(" 秒", "") + " 秒") +
           "</strong>";
       }
@@ -499,7 +516,7 @@
         const sel = parseInt(sizeSelect.value, 10) || n;
         const b = readBest(sel);
         menuBest.innerHTML =
-          "该尺寸最佳：<strong>" +
+          "最佳：<strong>" +
           (b == null ? "—" : formatSeconds(b).replace(" 秒", "") + " 秒") +
           "</strong>";
       }
@@ -516,6 +533,7 @@
         screenGame.classList.add("hidden");
         screenMenu.classList.remove("hidden");
         updateMenuBestUI();
+        renderMenuPreview();
       }
 
       function showGame() {
@@ -542,6 +560,33 @@
 
       function cellColorIndex(row, col) {
         return (row + col) % PALETTE.length;
+      }
+
+      function renderMenuPreview() {
+        const size = parseInt(sizeSelect.value, 10) || 4;
+        menuPreviewGrid.style.setProperty("--n", String(size));
+        menuPreviewGrid.style.gridTemplateColumns = "repeat(" + size + ", 1fr)";
+        menuPreviewGrid.innerHTML = "";
+        const max = size * size;
+        const nums = shuffle(
+          Array.from({ length: max }, function (_, i) {
+            return i + 1;
+          })
+        );
+        let idx = 0;
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            const num = nums[idx++];
+            const div = document.createElement("div");
+            div.className = "menu-cell";
+            const ci = cellColorIndex(r, c);
+            const pal = PALETTE[ci];
+            div.style.background = pal.bg;
+            div.style.color = pal.fg;
+            div.textContent = String(num);
+            menuPreviewGrid.appendChild(div);
+          }
+        }
       }
 
       function renderGrid() {
@@ -656,7 +701,6 @@
         n = parseInt(sizeSelect.value, 10) || 4;
         buildNumbers();
         renderGrid();
-        hintText.textContent = "以升序从 1 到 " + n * n + " 依次点按数字";
         nextLabelEl.textContent = "下一个：";
         nextNumEl.textContent = "1";
         updateGameBestUI();
@@ -715,7 +759,7 @@
           "本次用时：" +
           elapsedSec.toFixed(2) +
           " 秒" +
-          (isNew ? " · 已刷新本尺寸最佳" : "");
+          (isNew ? " · 已刷新最佳" : "");
       }
 
       function initSelect() {
@@ -731,6 +775,7 @@
 
       sizeSelect.addEventListener("change", function () {
         updateMenuBestUI();
+        renderMenuPreview();
       });
 
       btnStart.addEventListener("click", function () {
@@ -753,7 +798,6 @@
       });
 
       initSelect();
-      updateMenuBestUI();
       showMenu();
     })();
   </script>
