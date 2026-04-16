@@ -358,8 +358,8 @@
     .grid-mask-num {
       position: relative;
       z-index: 2;
-      font-size: clamp(4.5rem, 22vw, 7rem);
-      font-weight: 900;
+      font-size: clamp(2.4rem, 11vw, 3.75rem);
+      font-weight: 800;
       line-height: 1;
       color: rgba(71, 85, 105, 0.88);
       text-shadow: 0 2px 0 rgba(255, 255, 255, 0.9);
@@ -368,12 +368,67 @@
       pointer-events: none;
     }
 
+    .grid-mask-num.is-word {
+      font-size: clamp(1.75rem, 8vw, 2.6rem);
+      font-weight: 700;
+    }
+
     .result-banner {
       text-align: center;
-      font-size: 0.95rem;
+      min-height: 1.2em;
+    }
+
+    .result-compare {
+      color: #a8b4c4;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      padding: 10px 12px;
+      background: rgba(248, 250, 252, 0.95);
+      border: 1px solid #e8eef5;
+      border-radius: 14px;
+    }
+
+    .result-compare .rc-row {
+      margin: 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.35em;
+      flex-wrap: wrap;
+    }
+
+    .result-compare .rc-label {
+      color: #b0bcc9;
+      font-weight: 600;
+    }
+
+    .result-compare .rc-val {
+      color: #7c8a9b;
       font-weight: 700;
-      color: #059669;
-      min-height: 1.4em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .result-compare .rc-unit {
+      color: #b0bcc9;
+      font-size: 0.92em;
+    }
+
+    .result-compare .rc-hint {
+      margin: 8px 0 0;
+      font-size: 0.78rem;
+      color: #c5ced9;
+      font-weight: 500;
+    }
+
+    .result-compare .rc-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #94a3b8;
+      background: rgba(226, 232, 240, 0.6);
     }
 
     .btn-restart {
@@ -478,6 +533,52 @@
       let rafId = 0;
       let countdownTimer = null;
       let errorClearTimer = null;
+      let audioCtx = null;
+
+      function getAudioCtx() {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) audioCtx = new AC();
+        }
+        return audioCtx;
+      }
+
+      function resumeAudio() {
+        const c = getAudioCtx();
+        if (c && c.state === "suspended") {
+          c.resume().catch(function () {});
+        }
+      }
+
+      /** 点对：清脆短音（双音快速起音与衰减） */
+      function playCorrectSound() {
+        try {
+          const ctx = getAudioCtx();
+          if (!ctx) return;
+          const t = ctx.currentTime;
+          function chime(freq, vol) {
+            const o = ctx.createOscillator();
+            o.type = "sine";
+            o.frequency.setValueAtTime(freq, t);
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(vol, t + 0.012);
+            g.gain.exponentialRampToValueAtTime(0.0008, t + 0.1);
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start(t);
+            o.stop(t + 0.11);
+          }
+          chime(1568, 0.14);
+          chime(2093, 0.1);
+        } catch (e) {}
+      }
+
+      function pulseWrongFeedback() {
+        if (navigator.vibrate) {
+          navigator.vibrate([35, 60, 35]);
+        }
+      }
 
       function storageKey(size) {
         return "schulte_best_sec_" + size;
@@ -664,14 +765,19 @@
         clearCountdown();
         setPhase("countdown");
         setMaskVisible(true);
-        maskCountdown.textContent = "3";
         const seq = ["3", "2", "1", "开始"];
         let i = 0;
         maskCountdown.textContent = seq[i];
+        maskCountdown.classList.toggle("is-word", seq[i] === "开始");
         countdownTimer = setInterval(function () {
           i++;
           if (i < seq.length) {
             maskCountdown.textContent = seq[i];
+            if (seq[i] === "开始") {
+              maskCountdown.classList.add("is-word");
+            } else {
+              maskCountdown.classList.remove("is-word");
+            }
           } else {
             clearCountdown();
             setMaskVisible(false);
@@ -681,6 +787,7 @@
       }
 
       function startPlay() {
+        resumeAudio();
         nextExpected = 1;
         nextLabelEl.textContent = "下一个：";
         nextNumEl.textContent = "1";
@@ -698,6 +805,7 @@
           clearTimeout(errorClearTimer);
           errorClearTimer = null;
         }
+        resultBanner.textContent = "";
         n = parseInt(sizeSelect.value, 10) || 4;
         buildNumbers();
         renderGrid();
@@ -714,6 +822,7 @@
 
         const val = parseInt(cell.dataset.value, 10);
         if (val !== nextExpected) {
+          pulseWrongFeedback();
           cell.classList.remove("error");
           void cell.offsetWidth;
           cell.classList.add("error");
@@ -724,6 +833,8 @@
           return;
         }
 
+        resumeAudio();
+        playCorrectSound();
         nextExpected++;
         if (nextExpected > n * n) {
           finishGame();
@@ -740,26 +851,59 @@
         nextNumEl.textContent = "已完成";
         setPhase("complete");
 
-        const prev = readBest(n);
+        const prevBest = readBest(n);
         let isNew = false;
-        if (prev == null || elapsedSec < prev) {
+        if (prevBest == null || elapsedSec < prevBest) {
           writeBest(n, elapsedSec);
           isNew = true;
         }
+        const historyBest = readBest(n);
         updateGameBestUI();
         updateMenuBestUI();
 
-        window.alert(
-          "完成！用时 " +
-            elapsedSec.toFixed(2) +
-            " 秒" +
-            (isNew ? "\n（新纪录！）" : "")
-        );
-        resultBanner.textContent =
-          "本次用时：" +
-          elapsedSec.toFixed(2) +
-          " 秒" +
-          (isNew ? " · 已刷新最佳" : "");
+        const fmt = function (s) {
+          return s.toFixed(2);
+        };
+        const histStr =
+          historyBest == null ? "—" : fmt(historyBest);
+        let hintHtml = "";
+        let badgeHtml = "";
+        if (isNew) {
+          badgeHtml =
+            '<span class="rc-badge" role="status">新纪录</span>';
+          if (prevBest != null) {
+            hintHtml =
+              '<p class="rc-hint">较前一轮最佳快了 ' +
+              fmt(prevBest - elapsedSec) +
+              " 秒</p>";
+          } else {
+            hintHtml = '<p class="rc-hint">已记入历史最佳</p>';
+          }
+        } else {
+          const diff = elapsedSec - historyBest;
+          if (historyBest != null) {
+            if (diff < 0.015) {
+              hintHtml = '<p class="rc-hint">与历史最佳持平</p>';
+            } else {
+              hintHtml =
+                '<p class="rc-hint">较历史最佳还差 ' + fmt(diff) + " 秒</p>";
+            }
+          }
+        }
+
+        resultBanner.innerHTML =
+          '<div class="result-compare">' +
+          '<p class="rc-row"><span class="rc-label">本次</span>' +
+          '<strong class="rc-val">' +
+          fmt(elapsedSec) +
+          '</strong><span class="rc-unit">秒</span></p>' +
+          '<p class="rc-row"><span class="rc-label">历史最佳</span>' +
+          '<strong class="rc-val">' +
+          histStr +
+          '</strong><span class="rc-unit">秒</span></p>' +
+          hintHtml +
+          badgeHtml +
+          "</div>";
       }
 
       function initSelect() {
@@ -779,6 +923,7 @@
       });
 
       btnStart.addEventListener("click", function () {
+        resumeAudio();
         n = parseInt(sizeSelect.value, 10) || 4;
         showGame();
         bootstrapGame();
